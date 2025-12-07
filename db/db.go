@@ -24,3 +24,12 @@ func GetOrCreateDB(dbPath string) (*gorm.DB, error) {
 	}
 	return db, nil
 }
+
+func GetFramesBetween(dbConn *gorm.DB, videoID string, startTimeMicros uint64, endTimeMicros uint64) ([]Frame, error) {
+	var frames []Frame
+	err := dbConn.Where("video_id = ? AND timestamp_micros BETWEEN ? AND ?", videoID, startTimeMicros, endTimeMicros).Find(&frames).Error
+	if err != nil {
+		return nil, err
+	}
+	return frames, nil
+}

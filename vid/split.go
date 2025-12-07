@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-const bucket string = "vedit-v0"
-
 func uploadFrame(
 	dbConn *gorm.DB, 
 	ctx context.Context, 
@@ -24,7 +22,7 @@ func uploadFrame(
 	var objectPath string = fmt.Sprintf("%s/frame_%4d.jpg", videoID, frameIndex)
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
 	defer cancel()
-	wc := storage.Client.Bucket(bucket).Object(objectPath).NewWriter(ctx)
+	wc := storage.Client.Bucket(storage.Bucket).Object(objectPath).NewWriter(ctx)
 	_, err := wc.Write(imageBytes)
 	if err != nil {
 		return err
