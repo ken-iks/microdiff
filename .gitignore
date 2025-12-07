@@ -1,0 +1,14 @@
+*.env
+*.db
+*.jpg
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.gif
+*.png
+*.jpeg
+*.bmp
+*.tiff
+*.webp
