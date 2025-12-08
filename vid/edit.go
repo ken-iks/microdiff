@@ -125,7 +125,7 @@ func Edit(
 		}(frames[request.ImageIndex], request.ImagePrompt)
 	}
 
-	for i := 0; i < len(frames); i++ {
+	for i := 0; i < len(requests); i++ {
 		err := <-ch
 		if err != nil {
 			return "", err
