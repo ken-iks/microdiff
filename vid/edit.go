@@ -37,7 +37,7 @@ func Edit(
 	contentCfg := genai.GenerateContentConfig{
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
-				&genai.Part{Text: s},
+				{Text: s},
 			},
 		},
 		ResponseMIMEType: "application/json",
@@ -62,14 +62,14 @@ func Edit(
 	contentBuffer[0] = &genai.Content{
 		Role: "user",
 		Parts: []*genai.Part{
-			&genai.Part{Text: prompt},
+			{Text: prompt},
 		},
 	}
 	for i, frame := range frames {
 		contentBuffer[i + 1] = &genai.Content{
 			Role: "user",
 			Parts: []*genai.Part{
-				&genai.Part{
+				{
 					FileData: &genai.FileData{
 						FileURI: fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath),
 						MIMEType: "image/jpeg",
@@ -94,12 +94,13 @@ func Edit(
 	}
 
 	ch := make(chan error, len(requests))
+	os.MkdirAll("edited", 0755)
 	for _, request := range requests {
 		go func(frame db.Frame, prompt string) {
 			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
 			
 			// TODO: store image locally so we don't have to download it from GCS every time
-			new, err := vertex.Models.EditImage(
+			editedImage, err := vertex.Models.EditImage(
 				ctx,
 				"gemini-3-pro-image-preview",
 				prompt,
@@ -111,13 +112,14 @@ func Edit(
 					},
 				},
 				&genai.EditImageConfig{
-					OutputGCSURI: fmt.Sprintf("gs://%s/edited/%s", storage.Bucket, frame.ObjectPath),
 					NumberOfImages: 1,
 				},
 			)
 			if err != nil {
 				ch <- err
 			}
+			imageBytes := editedImage.GeneratedImages[0].Image.ImageBytes
+			os.WriteFile(fmt.Sprintf("edited/frame_%4d.jpg", request.ImageIndex), imageBytes, 0644)
 			ch <- nil
 		}(frames[request.ImageIndex], request.ImagePrompt)
 	}
