@@ -17,7 +17,7 @@ func uploadFrame(
 	imageBytes []byte, 
 	videoID string, 
 	frameIndex uint, 
-	tsMicros uint64,
+	tsMillis uint64,
 ) error {
 	var objectPath string = fmt.Sprintf("%s/frame_%4d.jpg", videoID, frameIndex)
 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
@@ -33,7 +33,7 @@ func uploadFrame(
 	frame := db.Frame{
 		VideoID:         videoID,
 		FrameIndex:      frameIndex,
-		TimestampMicros: tsMicros,
+		TimestampMillis: tsMillis,
 		ObjectPath:      objectPath,
 	}
 	err = dbConn.Create(&frame).Error
@@ -70,7 +70,7 @@ func Split(
 		}
 		n++
 
-		tsMicros := video.Get(gocv.VideoCapturePosMsec)
+		tsMillis := video.Get(gocv.VideoCapturePosMsec)
 
 		buf, err := gocv.IMEncode(".jpg", frame)
 		if err != nil {
@@ -82,10 +82,10 @@ func Split(
 		buf.Close()
 
 		sem <- struct{}{} // acquire semaphore slot
-		go func(frameIndex uint, imageBytes []byte, tsMicros uint64) {
+		go func(frameIndex uint, imageBytes []byte, tsMillis uint64) {
 			defer func() { <-sem }() // release semaphore slot
-			ch <- uploadFrame(dbConn, ctx, storage, imageBytes, videoID, frameIndex, tsMicros)
-		}(uint(n), imageBytes, uint64(tsMicros))
+			ch <- uploadFrame(dbConn, ctx, storage, imageBytes, videoID, frameIndex, tsMillis)
+		}(uint(n), imageBytes, uint64(tsMillis))
 	}
 
 	for i := 0; i < n; i++ {

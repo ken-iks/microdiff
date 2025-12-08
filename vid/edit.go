@@ -22,16 +22,16 @@ func Edit(
 	vertex *genai.Client,
 	videoID string,
 	prompt string,
-	startTimeMicros uint64,
-	endTimeMicros uint64,
-) (string, error) {
-	frames, err := db.GetFramesBetween(dbConn, videoID, startTimeMicros, endTimeMicros)
+	startTimeMillis uint64,
+	endTimeMillis uint64,
+) error {
+	frames, err := db.GetFramesBetween(dbConn, videoID, startTimeMillis, endTimeMillis)
 	if err != nil {
-		return "", err
+		return err
 	}
-	instructions, err := os.ReadFile("instructions.md")
+	instructions, err := os.ReadFile("vid/instructions.md")
 	if err != nil {
-		return "", err
+		return err
 	}
 	s := string(instructions)
 	contentCfg := genai.GenerateContentConfig{
@@ -86,7 +86,7 @@ func Edit(
 		&contentCfg,
 	)
 	if err != nil {
-		return "", err
+		return err
 	}
 	var requests []EditImageRequest
 	if txt := response.Text(); txt != "" {
@@ -101,7 +101,8 @@ func Edit(
 		go func(frame db.Frame, prompt string) {
 			defer func() { <-sem }() // release semaphore slot
 			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
-			
+			// TODO: make a new gcp project so I can access this model... gen-lang-client projects are AI studio projects with access to less models.
+			// ^ this will require the new projects service account having permissions for the storage buckets of the old project.
 			editedImage, err := vertex.Models.EditImage(
 				ctx,
 				"gemini-3-pro-image-preview",
@@ -130,9 +131,9 @@ func Edit(
 	for i := 0; i < len(requests); i++ {
 		err := <-ch
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
-	return "", nil
+	return nil
 }

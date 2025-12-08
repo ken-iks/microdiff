@@ -38,24 +38,24 @@ func main() {
 			}
 			fmt.Println("Video uploaded with ID: ", videoID)
 		case "edit":
-			startTimeMicros, err := strconv.ParseUint(os.Args[4], 10, 64)
+			startTimeSeconds, err := strconv.ParseUint(os.Args[4], 10, 64)
 			if err != nil {
 				log.Fatal(err)
 			}
-			endTimeMicros, err := strconv.ParseUint(os.Args[5], 10, 64)
+			endTimeSeconds, err := strconv.ParseUint(os.Args[5], 10, 64)
 			if err != nil {
 				log.Fatal(err)
 			}
 			vertex, err := genai.NewClient(ctx, &genai.ClientConfig{
 				Project: os.Getenv("GCP_PROJ_ID"),
-				Location: os.Getenv("GCP_LOCATION"),
+				Location: os.Getenv("CLOUD_LOCATION_G"),
 				Backend: genai.BackendVertexAI,
 			})
-			path, err := vid.Edit(db, ctx, storage, vertex, os.Args[2], os.Args[3], startTimeMicros, endTimeMicros)
+			err = vid.Edit(db, ctx, storage, vertex, os.Args[2], os.Args[3], startTimeSeconds * 1000, endTimeSeconds * 1000)
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("Edited video saved to %s\n", path)
+			fmt.Println("Video edited. Check edited/ folder for images")
 		default:
 			log.Fatal("Invalid command")
 	}
