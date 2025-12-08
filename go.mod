@@ -7,6 +7,7 @@ toolchain go1.24.7
 require (
 	cloud.google.com/go/storage v1.58.0
 	github.com/google/uuid v1.6.0
+	github.com/joho/godotenv v1.5.1
 	gocv.io/x/gocv v0.42.0
 	google.golang.org/genai v1.37.0
 	gorm.io/driver/sqlite v1.6.0

@@ -94,12 +94,14 @@ func Edit(
 	}
 
 	ch := make(chan error, len(requests))
+	sem := make(chan struct{}, 10) // bottlneck here is rate limts for api
 	os.MkdirAll("edited", 0755)
 	for _, request := range requests {
+		sem <- struct{}{} // acquire semaphore slot
 		go func(frame db.Frame, prompt string) {
+			defer func() { <-sem }() // release semaphore slot
 			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
 			
-			// TODO: store image locally so we don't have to download it from GCS every time
 			editedImage, err := vertex.Models.EditImage(
 				ctx,
 				"gemini-3-pro-image-preview",
@@ -120,7 +122,7 @@ func Edit(
 				return
 			}
 			imageBytes := editedImage.GeneratedImages[0].Image.ImageBytes
-			os.WriteFile(fmt.Sprintf("edited/frame_%4d.jpg", request.ImageIndex), imageBytes, 0644)
+			os.WriteFile(fmt.Sprintf("edited/frame_%04d.jpg", frame.FrameIndex), imageBytes, 0644)
 			ch <- nil
 		}(frames[request.ImageIndex], request.ImagePrompt)
 	}

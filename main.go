@@ -9,11 +9,16 @@ import (
 	"small-go/vid"
 	"google.golang.org/genai"
 	"strconv"
+	"github.com/joho/godotenv"
 )
 
 var ctx = context.Background()
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 	storage, err := db.NewStorage(ctx, os.Getenv("GCP_PROJ_ID"))
 	if err != nil {
 		log.Fatal(err)
@@ -27,10 +32,11 @@ func main() {
 
 	switch os.Args[1] {
 		case "upload":
-			err := vid.Split(db, ctx, storage, os.Args[2])
+			videoID, err := vid.Split(db, ctx, storage, os.Args[2])
 			if err != nil {
 				log.Fatal(err)
 			}
+			fmt.Println("Video uploaded with ID: ", videoID)
 		case "edit":
 			startTimeMicros, err := strconv.ParseUint(os.Args[4], 10, 64)
 			if err != nil {

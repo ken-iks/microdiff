@@ -48,10 +48,10 @@ func Split(
 	ctx context.Context, 
 	storage *db.Storage, 
 	videoPath string,
-) error {
+) (string, error) {
 	video, err := gocv.VideoCaptureFile(videoPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer video.Close()
 
@@ -63,6 +63,7 @@ func Split(
 
 	n := 0 // frame counter
 	ch := make(chan error, int(video.Get(gocv.VideoCaptureFrameCount)))
+	sem := make(chan struct{}, 20) // limit the number of concurrent uploads to not exhaust the memory
 	for {
 		if ok := video.Read(&frame); !ok || frame.Empty() {
 			break
@@ -73,14 +74,16 @@ func Split(
 
 		buf, err := gocv.IMEncode(".jpg", frame)
 		if err != nil {
-			return err
+			return "", err
 		}
 		imageBytes := make([]byte, len(buf.GetBytes()))
 		//TODO: note that this may be not needed. Check if buf.GetBytes() is a slice and not a pointer.
 		copy(imageBytes, buf.GetBytes())
 		buf.Close()
 
+		sem <- struct{}{} // acquire semaphore slot
 		go func(frameIndex uint, imageBytes []byte, tsMicros uint64) {
+			defer func() { <-sem }() // release semaphore slot
 			ch <- uploadFrame(dbConn, ctx, storage, imageBytes, videoID, frameIndex, tsMicros)
 		}(uint(n), imageBytes, uint64(tsMicros))
 	}
@@ -88,8 +91,8 @@ func Split(
 	for i := 0; i < n; i++ {
 		err := <-ch
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return videoID, nil
 }
