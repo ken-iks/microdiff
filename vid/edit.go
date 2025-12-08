@@ -117,6 +117,7 @@ func Edit(
 			)
 			if err != nil {
 				ch <- err
+				return
 			}
 			imageBytes := editedImage.GeneratedImages[0].Image.ImageBytes
 			os.WriteFile(fmt.Sprintf("edited/frame_%4d.jpg", request.ImageIndex), imageBytes, 0644)
