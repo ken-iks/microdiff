@@ -15,5 +15,5 @@ func NewStorage(ctx context.Context, projectID string) (*Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Storage{Client: client, Bucket: "vedit-v0"}, nil
+	return &Storage{Client: client, Bucket: "vedit-v1"}, nil
 }

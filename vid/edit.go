@@ -2,12 +2,12 @@ package vid
 
 import (
 	"context"
-	"small-go/db"
-	"gorm.io/gorm"
-	"google.golang.org/genai"
+	"encoding/json"
 	"fmt"
 	"os"
-	"encoding/json"
+	"small-go/db"
+	"google.golang.org/genai"
+	"gorm.io/gorm"
 )
 
 type EditImageRequest struct {
@@ -100,31 +100,43 @@ func Edit(
 		sem <- struct{}{} // acquire semaphore slot
 		go func(frame db.Frame, prompt string) {
 			defer func() { <-sem }() // release semaphore slot
-			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
-			// TODO: make a new gcp project so I can access this model... gen-lang-client projects are AI studio projects with access to less models.
-			// ^ this will require the new projects service account having permissions for the storage buckets of the old project.
-			editedImage, err := vertex.Models.EditImage(
+			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)	
+			// image editing happens through the generate content endpoint NOT the edit image endpoint.
+			// edit image is not comnpatable with gemini models (only imagen models which are going to be deprecated soon)
+			resp, err := vertex.Models.GenerateContent(
 				ctx,
-				"gemini-3-pro-image-preview",
-				prompt,
-				[]genai.ReferenceImage{
-					&genai.RawReferenceImage{
-						ReferenceImage: &genai.Image{
-							GCSURI: uri,
+				"gemini-2.5-flash-image", // gemini-3-pro-image-preview is HEAVILY rate limited at the moment due to DSQ (12/09/25)
+				[]*genai.Content{
+					{
+						Role: "user",
+						Parts: []*genai.Part{
+							{Text: prompt},
+							{FileData: &genai.FileData{FileURI: uri, MIMEType: "image/jpeg"}},
 						},
 					},
 				},
-				&genai.EditImageConfig{
-					NumberOfImages: 1,
-				},
+				&genai.GenerateContentConfig{},
 			)
 			if err != nil {
 				ch <- err
 				return
 			}
-			imageBytes := editedImage.GeneratedImages[0].Image.ImageBytes
-			os.WriteFile(fmt.Sprintf("edited/frame_%04d.jpg", frame.FrameIndex), imageBytes, 0644)
-			ch <- nil
+
+			for _, part := range resp.Candidates[0].Content.Parts {
+				if part.InlineData != nil {
+					editedImageBytes := part.InlineData.Data
+					err := os.WriteFile(fmt.Sprintf("edited/frame_%04d.jpg", frame.FrameIndex), editedImageBytes, 0644)
+					if err != nil {
+						ch <- err
+						return
+					}
+					ch <- nil
+					return
+				}
+			}
+			
+			fmt.Println("Could not edit image")
+			ch <- fmt.Errorf("could not edit image")
 		}(frames[request.ImageIndex], request.ImagePrompt)
 	}
 

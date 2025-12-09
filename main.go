@@ -48,7 +48,7 @@ func main() {
 			}
 			vertex, err := genai.NewClient(ctx, &genai.ClientConfig{
 				Project: os.Getenv("GCP_PROJ_ID"),
-				Location: os.Getenv("CLOUD_LOCATION_G"),
+				Location: os.Getenv("CLOUD_LOCATION_G"), // note: gemini preview models need to be global region not us-central1
 				Backend: genai.BackendVertexAI,
 			})
 			err = vid.Edit(db, ctx, storage, vertex, os.Args[2], os.Args[3], startTimeSeconds * 1000, endTimeSeconds * 1000)
