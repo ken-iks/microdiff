@@ -25,7 +25,12 @@ func GetOrCreateDB(dbPath string) (*gorm.DB, error) {
 	return db, nil
 }
 
-func GetFramesBetween(dbConn *gorm.DB, videoID string, startTimeMillis uint64, endTimeMillis uint64) ([]Frame, error) {
+func GetFramesBetween(
+	dbConn *gorm.DB, 
+	videoID string, 
+	startTimeMillis uint64, 
+	endTimeMillis uint64,
+) ([]Frame, error) {
 	var frames []Frame
 	err := dbConn.Where("video_id = ? AND timestamp_millis BETWEEN ? AND ?", videoID, startTimeMillis, endTimeMillis).Find(&frames).Error
 	if err != nil {

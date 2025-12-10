@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"os"
 	"small-go/db"
+
 	"google.golang.org/genai"
 	"gorm.io/gorm"
 )
 
 type EditImageRequest struct {
-	ImageIndex int `json:"imageIndex"`
+	ImageIndex  int    `json:"imageIndex"`
 	ImagePrompt string `json:"imagePrompt"`
 }
 
@@ -29,11 +30,11 @@ func Edit(
 	if err != nil {
 		return err
 	}
-	instructions, err := os.ReadFile("vid/instructions.md")
+	prompterInstructions, err := os.ReadFile("prompts/prompter.md")
 	if err != nil {
 		return err
 	}
-	s := string(instructions)
+	s := string(prompterInstructions)
 	contentCfg := genai.GenerateContentConfig{
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
@@ -58,7 +59,7 @@ func Edit(
 		},
 	}
 
-	contentBuffer := make([]*genai.Content, len(frames) + 1)
+	contentBuffer := make([]*genai.Content, len(frames)+1)
 	contentBuffer[0] = &genai.Content{
 		Role: "user",
 		Parts: []*genai.Part{
@@ -66,12 +67,12 @@ func Edit(
 		},
 	}
 	for i, frame := range frames {
-		contentBuffer[i + 1] = &genai.Content{
+		contentBuffer[i+1] = &genai.Content{
 			Role: "user",
 			Parts: []*genai.Part{
 				{
 					FileData: &genai.FileData{
-						FileURI: fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath),
+						FileURI:  fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath),
 						MIMEType: "image/jpeg",
 					},
 				},
@@ -96,11 +97,15 @@ func Edit(
 	ch := make(chan error, len(requests))
 	sem := make(chan struct{}, 10) // bottlneck here is rate limts for api
 	os.MkdirAll("edited", 0755)
+	editorInstructions, err := os.ReadFile("prompts/editor.md")
+	if err != nil {
+		return err
+	}
 	for _, request := range requests {
 		sem <- struct{}{} // acquire semaphore slot
 		go func(frame db.Frame, prompt string) {
 			defer func() { <-sem }() // release semaphore slot
-			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)	
+			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
 			// image editing happens through the generate content endpoint NOT the edit image endpoint.
 			// edit image is not comnpatable with gemini models (only imagen models which are going to be deprecated soon)
 			resp, err := vertex.Models.GenerateContent(
@@ -115,7 +120,13 @@ func Edit(
 						},
 					},
 				},
-				&genai.GenerateContentConfig{},
+				&genai.GenerateContentConfig{
+					SystemInstruction: &genai.Content{
+						Parts: []*genai.Part{
+							{Text: string(editorInstructions)},
+						},
+					},
+				},
 			)
 			if err != nil {
 				ch <- err
@@ -134,7 +145,7 @@ func Edit(
 					return
 				}
 			}
-			
+
 			fmt.Println("Could not edit image")
 			ch <- fmt.Errorf("could not edit image")
 		}(frames[request.ImageIndex], request.ImagePrompt)
