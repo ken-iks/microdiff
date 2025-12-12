@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"small-go/db"
+	"strings"
+	"time"
 
 	"google.golang.org/genai"
 	"gorm.io/gorm"
@@ -113,28 +116,52 @@ func Edit(
 			}
 			// image editing happens through the generate content endpoint NOT the edit image endpoint.
 			// edit image is not comnpatable with gemini models (only imagen models which are going to be deprecated soon)
-			resp, err := vertex.Models.GenerateContent(
-				ctx,
-				"gemini-2.5-flash-image", // gemini-3-pro-image-preview is HEAVILY rate limited at the moment due to DSQ (12/09/25)
-				[]*genai.Content{
-					{
-						Role: "user",
-						Parts: []*genai.Part{
-							{Text: prompt},
-							{FileData: &genai.FileData{FileURI: uri, MIMEType: "image/jpeg"}},
+			// Retry logic for rate-limited gemini-3-pro-image-preview
+			var resp *genai.GenerateContentResponse
+			maxRetries := 5
+			baseDelay := 2 * time.Second
+			for attempt := 0; attempt < maxRetries; attempt++ {
+				var err error
+				resp, err = vertex.Models.GenerateContent(
+					ctx,
+					"gemini-3-pro-image-preview", // gemini-3-pro-image-preview is HEAVILY rate limited at the moment due to DSQ (12/09/25)
+					[]*genai.Content{
+						{
+							Role: "user",
+							Parts: []*genai.Part{
+								{Text: prompt},
+								{FileData: &genai.FileData{FileURI: uri, MIMEType: "image/jpeg"}},
+							},
 						},
 					},
-				},
-				&genai.GenerateContentConfig{
-					SystemInstruction: &genai.Content{
-						Parts: []*genai.Part{
-							{Text: string(editorInstructions)},
+					&genai.GenerateContentConfig{
+						SystemInstruction: &genai.Content{
+							Parts: []*genai.Part{
+								{Text: string(editorInstructions)},
+							},
 						},
 					},
-				},
-			)
-			if err != nil {
+				)
+				if err == nil {
+					break
+				}
+
+				// Check if it's a 429 error (rate limit)
+				errStr := err.Error()
+				if strings.Contains(errStr, "429") || strings.Contains(errStr, "RESOURCE_EXHAUSTED") {
+					if attempt < maxRetries-1 {
+						delay := baseDelay * time.Duration(1<<uint(attempt)) // exponential backoff
+						slog.Warn("Rate limit hit, retrying image edit", "attempt", attempt+1, "delay", delay, "frame_index", frame.FrameIndex, "error", errStr)
+						time.Sleep(delay)
+						continue
+					}
+				}
+				// If not a 429 or we've exhausted retries, return the error
 				ch <- err
+				return
+			}
+			if resp == nil {
+				ch <- fmt.Errorf("failed to get response after %d attempts", maxRetries)
 				return
 			}
 
