@@ -105,7 +105,12 @@ func Edit(
 		sem <- struct{}{} // acquire semaphore slot
 		go func(frame db.Frame, prompt string) {
 			defer func() { <-sem }() // release semaphore slot
-			uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
+			// uri := fmt.Sprintf("gs://%s/%s", storage.Bucket, frame.ObjectPath)
+			uri, err := Selector(ctx, storage, vertex, prompt, frame.ObjectPath)
+			if err != nil {
+				ch <- err
+				return
+			}
 			// image editing happens through the generate content endpoint NOT the edit image endpoint.
 			// edit image is not comnpatable with gemini models (only imagen models which are going to be deprecated soon)
 			resp, err := vertex.Models.GenerateContent(
